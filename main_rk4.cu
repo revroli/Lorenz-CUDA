@@ -17,7 +17,7 @@ int main()
 {
 	
 	int Resolution      = 1536*64*100; // Threads per SM * number of SMs * 3
-	int BlockSize; //      = 128;
+	int BlockSize = 128;
 	
 	ListCUDADevices();
 	
@@ -51,41 +51,20 @@ int main()
 	cudaMemcpy(d_Parameters, h_Parameters, sizeof(float)*Resolution, cudaMemcpyHostToDevice);
 	
 	// Integration
-	int GridSize;// = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
-	
-	//clock_t SimulationStart = clock();
-	
-/*     BlockSize = 64;
-    GridSize = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
+	int GridSize = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
 	
 	RungeKutta4<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution);
-	cudaDeviceSynchronize(); */
-    
-    BlockSize = 128;
-    GridSize = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
-	
-	RungeKutta4<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution);
-	cudaDeviceSynchronize();
-	
-/*     BlockSize = 192;
-    GridSize = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
-	
-    RungeKutta4<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution);
-	cudaDeviceSynchronize();
-	
-    BlockSize = 256;
-    GridSize = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
-	
-    RungeKutta4<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution);
-	cudaDeviceSynchronize(); */
 
-	
-	//clock_t SimulationEnd = clock();
-	//cout << "Simulation time: " << 1000.0*(SimulationEnd-SimulationStart) / CLOCKS_PER_SEC << "ms" << endl << endl;
+	cudaDeviceSynchronize();
 	
 	cudaMemcpy(h_State, d_State, 3*sizeof(float)*Resolution, cudaMemcpyDeviceToHost);
 	
-	ofstream outfile("output_origi.txt");
+	ofstream outfile("output_files/origi_output.txt");
+	outfile << std::setprecision(8) << std::fixed;
+	outfile << "# Lorenz System CUDA Simulation Output\n";
+	outfile << "# Columns: Parameter X Y Z\n";
+	outfile << "# Resolution: " << Resolution << "\n";
+	outfile << "# Each row: <parameter> <X> <Y> <Z>\n";
 	outfile << std::setprecision(8) << std::fixed;
 	for (int i = 0; i < Resolution; ++i) {
 		outfile << h_Parameters[i] << " "
@@ -95,8 +74,6 @@ int main()
 	}
 	outfile.close();
 
-	//for (int i=0; i<NumberOfProblems; i++)
-	//	cout << "P: " << h_Parameters[i] << "   Sates: " << h_State[i] << ", " << h_State[i+NumberOfProblems] << ", " << h_State[i+2*NumberOfProblems] << endl;
 }
 
 __forceinline__ __device__ void Lorenz(float* F, float* X, float P)
@@ -175,18 +152,10 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 	
 	if (tid < N)
 	{
-		float X[3] = {d_State[tid],d_State[tid+N],d_State[tid+2*N]};
-
-		//X[0] = d_State[tid];
-		//X[1] = d_State[tid + N];
-		//X[2] = d_State[tid + 2*N];
+		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
 
 		float P = d_Parameters[tid];
 		
-		// van egy k vector
-		//implicitet nem lehet így kiszámolni, úgyhogy csak az explicitet számoljuk
-
-
 		float k1[3];
 		float k2[3];
 		float k3[3];

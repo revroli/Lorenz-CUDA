@@ -84,9 +84,9 @@ int main()
 	cudaMemcpy(d_State, h_State, 3*sizeof(float)*Resolution, cudaMemcpyHostToDevice);
 	cudaMemcpy(d_Parameters, h_Parameters, sizeof(float)*Resolution, cudaMemcpyHostToDevice);
 	
-	cudaMemcpy(d_A, h_Parameters, (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float)*Resolution, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_B, h_Parameters, sizeof(float)*RK_ORDER, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_C, h_Parameters, sizeof(float)*RK_ORDER, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_A, h_A, (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float)*Resolution, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_B, h_B, sizeof(float)*RK_ORDER, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_C, h_C, sizeof(float)*RK_ORDER, cudaMemcpyHostToDevice);
 
 	// Integration
 	int GridSize = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
@@ -97,8 +97,12 @@ int main()
 	cudaMemcpy(h_State, d_State, 3*sizeof(float)*Resolution, cudaMemcpyDeviceToHost);
 	
 
-	ofstream outfile("output.txt");
+	ofstream outfile("output_files/main_output.txt");
 	outfile << std::setprecision(8) << std::fixed;
+	outfile << "# Lorenz System CUDA Simulation Output\n";
+	outfile << "# Columns: Parameter X Y Z\n";
+	outfile << "# Resolution: " << Resolution << "\n";
+	outfile << "# Each row: <parameter> <X> <Y> <Z>\n";
 	for (int i = 0; i < Resolution; ++i) {
 		outfile << h_Parameters[i] << " "
 				<< h_State[i] << " "
@@ -122,43 +126,28 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N, float* d
 	
 	if (tid < N)
 	{
-		float X[3] = {d_State[tid],d_State[tid+N],d_State[tid+2*N]};
-
-		//X[0] = d_State[tid];
-		//X[1] = d_State[tid + N];
-		//X[2] = d_State[tid + 2*N];
+		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
 
 		float P = d_Parameters[tid];
 		
 		// van egy k vector
 		//implicitet nem lehet így kiszámolni, úgyhogy csak az explicitet számoljuk
 
-/* 		float intersum = 0;
-
-		//k[0] = kn1
-		for (int i = 0; i < RK_ORDER){
-
-			for (int j = 1; j < ){
-				intersum += 
-
-			}
-			
-		}
- */
 		float k[RK_ORDER * 3];		//hogyan rendezem? legyen [iteráció][x-dimenzió]
 		float x[3];
 		float intersum;
 		
+		float T = 0;
 		float h = 0.001; //DT
 		
 		for (int n=0; n<10000; n++)
 		{
 			Lorenz(k, X, P);		//kn1
 
-			for (int i = 1; i < RK_ORDER; i++){
-				
+			for (int i = 1; i < RK_ORDER; i++){		
+
 				for (int k_iter=0; k_iter<3; k_iter++){
-				
+
 					intersum = 0;
 
 					for (int j=0; j < i; j++){
@@ -180,6 +169,8 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N, float* d
 				
 				X[i] = X[i] + h * intersum;
 			}
+
+			T += h;
 		}
 		
 		d_State[tid] = X[0];
