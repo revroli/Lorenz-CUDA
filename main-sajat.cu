@@ -12,7 +12,7 @@
 #define BETA 2.666
 
 
-__global__ void Lorenz(float* x1, float* x2, float* x3, int N, int I, float* sigma, float* rho, float* beta)
+__global__ void Lorenz(float* x1, float* x2, float* x3, int N, int I)
 __global__ void RungeKutta4(float* d_State, float* rho, int N)
 
 int main(){
