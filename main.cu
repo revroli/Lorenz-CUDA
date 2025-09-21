@@ -24,6 +24,7 @@ int main()
 
 	int Resolution = 1536*64*100; // Threads per SM * number of SMs * 3
 	int BlockSize  = 128;
+	int GridSize = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
 	
 	ListCUDADevices();
 	
@@ -38,25 +39,11 @@ int main()
 	float* h_Parameters = (float*)aligned_alloc(64,   Resolution * sizeof(float));
 	float* h_A = (float*)aligned_alloc(64,   (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float));
 	float* h_B = (float*)aligned_alloc(64,   RK_ORDER * sizeof(float));
-	//float* h_C = (float*)aligned_alloc(64,   RK_ORDER * sizeof(float));
-
-	//float* h_Butcher = (float*)aligned_alloc(64, BUTCHER_SIZE * BUTCHER_SIZE * sizeof(float));
-	
 
 	float* d_State;
 	float* d_Parameters;
-	//float* d_A;
-	//float* d_B;
-	//float* d_C;
-	//float* d_Butcher;
 	cudaMalloc((void**)&d_State,      3*Resolution * sizeof(float));
 	cudaMalloc((void**)&d_Parameters,   Resolution * sizeof(float));
-
-	//cudaMalloc((void**)&d_A,   (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float));
-	//cudaMalloc((void**)&d_B,   RK_ORDER * sizeof(float));
-	//cudaMalloc((void**)&d_C,   RK_ORDER * sizeof(float));
-	//cudaMalloc((void**)&d_Butcher,   BUTCHER_SIZE * BUTCHER_SIZE * sizeof(float));
-	
 
 	// Initialisation
 	Linspace(h_Parameters, 0.0, 40.0, Resolution);
@@ -71,32 +58,24 @@ int main()
 	h_A[3] = 0.0f; h_A[4] = 0.5f; h_A[5] = 0.0f;
 	h_A[6] = 0.0f; h_A[7] = 0.0f; h_A[8] = 1.0f;
 
-	// Initialize h_B (length RK_ORDER)
 	h_B[0] = 1.0f/6.0f;
 	h_B[1] = 1.0f/3.0f;
 	h_B[2] = 1.0f/3.0f;
 	h_B[3] = 1.0f/6.0f;
 
-	/* 	// Initialize h_C (length RK_ORDER)
-	h_C[0] = 0.0f;
-	h_C[1] = 0.5f;
-	h_C[2] = 0.5f;
-	h_C[3] = 1.0f; */
-	
-	
+
 	cudaMemcpy(d_State, h_State, 3*sizeof(float)*Resolution, cudaMemcpyHostToDevice);
 	cudaMemcpy(d_Parameters, h_Parameters, sizeof(float)*Resolution, cudaMemcpyHostToDevice);
 	
+	//Butcher Tableau to constant memory
 	cudaMemcpyToSymbol(const_d_A, h_A, (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float));
 	cudaMemcpyToSymbol(const_d_B, h_B, sizeof(float) * RK_ORDER);
-	//cudaMemcpy(d_C, h_C, sizeof(float)*RK_ORDER, cudaMemcpyHostToDevice);
 
-	// Integration
-	int GridSize = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
-	
+	//Kernel run
 	RungeKutta4<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution);
 	cudaDeviceSynchronize();
 	
+	//Save the products
 	cudaMemcpy(h_State, d_State, 3*sizeof(float)*Resolution, cudaMemcpyDeviceToHost);
 	
 
@@ -113,7 +92,6 @@ int main()
 				<< h_State[i + 2 * Resolution] << "\n";
 	}
 	outfile.close();
-
 }
 
 __forceinline__ __device__ void Lorenz(float* F, float* X, float P)
@@ -147,14 +125,20 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 		{
 			Lorenz(k, X, P);		//kn1
 
+			#pragma unroll
 			for (int i = 1; i < RK_ORDER; i++){		
 
-				for (int k_iter=0; k_iter<3; k_iter++){
+				#pragma unroll
+				for (int k_iter = 0; k_iter < 3; k_iter++){
 
 					intersum = 0;
 
+					#pragma unroll
 					for (int j=0; j < i; j++){
-						intersum += k[j*3 + k_iter] * const_d_A[(i-1) * 3 + j];	//a a 00-ból kell induljon
+						intersum += k[j*3 + k_iter] * const_d_A[(i-1) * 3 + j];	//a a 00-ból kell induljon 
+																//ezt átírni valahogy 1 MA-ra?
+																// unrollal biztos kijön
+																//(i-1)*-at elég lehet csak 1-szer kiszámolni
 					}
 					
 					x[k_iter] = X[k_iter] + h  * intersum;
@@ -163,9 +147,11 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 				Lorenz(k + 3*i, x, P);
 			}
 
-			for (int i = 0; i<3; i++){
+			#pragma unroll
+			for (int i = 0; i < 3; i++){
 				intersum = 0;
 
+				#pragma unroll
 				for (int j = 0; j < RK_ORDER; j++){
 					intersum += const_d_B[j] * k[3*j + i]; 
 				}
@@ -173,7 +159,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 				X[i] = X[i] + h * intersum;
 			}
 
-			T += h;
+			T += h; //kihagyható amúgy
 		}
 		
 		d_State[tid] = X[0];
