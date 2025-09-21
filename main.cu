@@ -120,13 +120,17 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 		
 		float T = 0;
 		float h = 0.001; //DT
+
+		int i_minus;
 		
 		for (int n=0; n<10000; n++)
 		{
 			Lorenz(k, X, P);		//kn1
 
 			#pragma unroll
-			for (int i = 1; i < RK_ORDER; i++){		
+			for (int i = 1; i < RK_ORDER; i++){
+				
+				i_minus = i-1;
 
 				#pragma unroll
 				for (int k_iter = 0; k_iter < 3; k_iter++){
@@ -135,7 +139,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 
 					#pragma unroll
 					for (int j=0; j < i; j++){
-						intersum += k[j*3 + k_iter] * const_d_A[(i-1) * 3 + j];	//a a 00-ból kell induljon 
+						intersum += k[j*3 + k_iter] * const_d_A[(i_minus) * 3 + j];	//a a 00-ból kell induljon 
 																//ezt átírni valahogy 1 MA-ra?
 																// unrollal biztos kijön
 																//(i-1)*-at elég lehet csak 1-szer kiszámolni
