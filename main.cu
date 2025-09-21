@@ -116,7 +116,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 
 		float k[RK_ORDER * 3];		//hogyan rendezem? legyen [iteráció][x-dimenzió]
 		float x[3];
-		float intersum;
+		//float intersum;
 		
 		float T = 0;
 		float h = 0.001; //DT
@@ -127,7 +127,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 		{
 			Lorenz(k, X, P);		//kn1
 
-			#pragma unroll
+			/*#pragma unroll
 			for (int i = 1; i < RK_ORDER; i++){
 				
 				i_minus = i-1;
@@ -149,18 +149,45 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 				}	
 				
 				Lorenz(k + 3*i, x, P);
+			}*/
+			#pragma unroll
+			for (int i = 0; i<3; i++)
+			{
+				x[i] = X[i] + h * (k[i] * const_d_A[0]);
 			}
+
+			Lorenz(k + 3, x, P);
+			
+			#pragma unroll
+			for (int i = 0; i<3; i++)
+			{
+				x[i] = X[i] + h * (k[0] * const_d_A[0] + k[3+i] * const_d_A[4]);
+			}
+
+			Lorenz(k + 6, x, P);
+			
+			#pragma unroll
+			for (int i = 0; i<3; i++)
+			{
+				x[i] = X[i] + h * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
+			}
+
+			Lorenz(k + 9, x, P);
+
+			//unroll ended
 
 			#pragma unroll
 			for (int i = 0; i < 3; i++){
-				intersum = 0;
+				//intersum = 0;
 
-				#pragma unroll
+/* 				#pragma unroll
 				for (int j = 0; j < RK_ORDER; j++){
 					intersum += const_d_B[j] * k[3*j + i]; 
 				}
 				
-				X[i] = X[i] + h * intersum;
+				X[i] = X[i] + h * intersum; */
+				X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+
 			}
 
 			T += h; //kihagyható amúgy
