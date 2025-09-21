@@ -9,7 +9,7 @@
 #define RK_ORDER 4
 #define BUTCHER_SIZE RK_ORDER + 1
 
-#define h 0.001
+#define h 0.001f // [s]
 
 using namespace std;
 
