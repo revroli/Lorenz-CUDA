@@ -121,7 +121,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 		float T = 0;
 		float h = 0.001; //DT
 
-		int i_minus;
+		//int i_minus;
 		
 		for (int n=0; n<10000; n++)
 		{
@@ -150,7 +150,8 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 				
 				Lorenz(k + 3*i, x, P);
 			}*/
-/* 			#pragma unroll
+
+			#pragma unroll
 			for (int i = 0; i<3; i++)
 			{
 				x[i] = X[i] + h * (k[i] * const_d_A[0]);
@@ -172,9 +173,9 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 				x[i] = X[i] + h * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
 			}
 
-			Lorenz(k + 9, x, P); */
+			Lorenz(k + 9, x, P);
 
-			x[0] = X[0] + h * (k[0] * const_d_A[0]);
+/* 			x[0] = X[0] + h * (k[0] * const_d_A[0]);
 			x[1] = X[1] + h * (k[1] * const_d_A[0]);
 			x[2] = X[2] + h * (k[2] * const_d_A[0]);
 			
@@ -192,27 +193,26 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 			x[1] = X[1] + h * (k[1] * const_d_A[0] + k[4] * const_d_A[4] + k[7] * const_d_A[8]);
 			x[2] = X[2] + h * (k[2] * const_d_A[0] + k[5] * const_d_A[4] + k[8] * const_d_A[8]);
 
-			Lorenz(k + 9, x, P);
+			Lorenz(k + 9, x, P); */
 
 			//unroll ended
 
 			//#pragma unroll
-			//for (int i = 0; i < 3; i++){
+			for (int i = 0; i < 3; i++){
 				//intersum = 0;
 
-/* 				#pragma unroll
+ 				/*#pragma unroll
 				for (int j = 0; j < RK_ORDER; j++){
 					intersum += const_d_B[j] * k[3*j + i]; 
 				}
 				
-				X[i] = X[i] + h * intersum; */
-				//X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+				X[i] = X[i] + h * intersum;*/
+				X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+			}
 
-			//}
-
-			X[0] += h * (const_d_B[0] * k[0] + const_d_B[1] * k[3] + const_d_B[2] * k[6] + const_d_B[3] * k[9]); 
+/* 			X[0] += h * (const_d_B[0] * k[0] + const_d_B[1] * k[3] + const_d_B[2] * k[6] + const_d_B[3] * k[9]); 
 			X[1] += h * (const_d_B[0] * k[1] + const_d_B[1] * k[4] + const_d_B[2] * k[7] + const_d_B[3] * k[10]); 
-			X[2] += h * (const_d_B[0] * k[2] + const_d_B[1] * k[5] + const_d_B[2] * k[8] + const_d_B[3] * k[11]); 
+			X[2] += h * (const_d_B[0] * k[2] + const_d_B[1] * k[5] + const_d_B[2] * k[8] + const_d_B[3] * k[11]);  */
 
 			T += h; //kihagyható amúgy
 		}
