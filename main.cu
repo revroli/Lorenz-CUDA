@@ -12,9 +12,12 @@
 using namespace std;
 
 __device__ void Lorenz(float*, float*, float);
-__global__ void RungeKutta4(float*, float*, int, float*, float*, float*);
+__global__ void RungeKutta4(float*, float*, int);
 
 void Linspace(float*, float, float, int);
+
+__constant__ float const_d_A[(RK_ORDER-1)*(RK_ORDER-1)];
+__constant__ float const_d_B[RK_ORDER];
 
 int main()
 {
@@ -35,23 +38,23 @@ int main()
 	float* h_Parameters = (float*)aligned_alloc(64,   Resolution * sizeof(float));
 	float* h_A = (float*)aligned_alloc(64,   (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float));
 	float* h_B = (float*)aligned_alloc(64,   RK_ORDER * sizeof(float));
-	float* h_C = (float*)aligned_alloc(64,   RK_ORDER * sizeof(float));
+	//float* h_C = (float*)aligned_alloc(64,   RK_ORDER * sizeof(float));
 
 	//float* h_Butcher = (float*)aligned_alloc(64, BUTCHER_SIZE * BUTCHER_SIZE * sizeof(float));
 	
 
 	float* d_State;
 	float* d_Parameters;
-	float* d_A;
-	float* d_B;
-	float* d_C;
+	//float* d_A;
+	//float* d_B;
+	//float* d_C;
 	//float* d_Butcher;
 	cudaMalloc((void**)&d_State,      3*Resolution * sizeof(float));
 	cudaMalloc((void**)&d_Parameters,   Resolution * sizeof(float));
 
-	cudaMalloc((void**)&d_A,   (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float));
-	cudaMalloc((void**)&d_B,   RK_ORDER * sizeof(float));
-	cudaMalloc((void**)&d_C,   RK_ORDER * sizeof(float));
+	//cudaMalloc((void**)&d_A,   (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float));
+	//cudaMalloc((void**)&d_B,   RK_ORDER * sizeof(float));
+	//cudaMalloc((void**)&d_C,   RK_ORDER * sizeof(float));
 	//cudaMalloc((void**)&d_Butcher,   BUTCHER_SIZE * BUTCHER_SIZE * sizeof(float));
 	
 
@@ -84,14 +87,14 @@ int main()
 	cudaMemcpy(d_State, h_State, 3*sizeof(float)*Resolution, cudaMemcpyHostToDevice);
 	cudaMemcpy(d_Parameters, h_Parameters, sizeof(float)*Resolution, cudaMemcpyHostToDevice);
 	
-	cudaMemcpy(d_A, h_A, (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float)*Resolution, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_B, h_B, sizeof(float)*RK_ORDER, cudaMemcpyHostToDevice);
-	cudaMemcpy(d_C, h_C, sizeof(float)*RK_ORDER, cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol(const_d_A, h_A, (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float));
+	cudaMemcpyToSymbol(const_d_B, h_B, sizeof(float) * RK_ORDER);
+	//cudaMemcpy(d_C, h_C, sizeof(float)*RK_ORDER, cudaMemcpyHostToDevice);
 
 	// Integration
 	int GridSize = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
 	
-	RungeKutta4<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution, d_A, d_B, d_C);
+	RungeKutta4<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution);
 	cudaDeviceSynchronize();
 	
 	cudaMemcpy(h_State, d_State, 3*sizeof(float)*Resolution, cudaMemcpyDeviceToHost);
@@ -120,7 +123,7 @@ __forceinline__ __device__ void Lorenz(float* F, float* X, float P)
 	F[2] = X[0]*X[1] - float(2.666) * X[2];
 }
 
-__global__ void RungeKutta4(float* d_State, float* d_Parameters, int N, float* d_A, float* d_B, float* d_C)
+__global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 {
 	int tid = threadIdx.x + blockIdx.x*blockDim.x;
 	
@@ -151,7 +154,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N, float* d
 					intersum = 0;
 
 					for (int j=0; j < i; j++){
-						intersum += k[j*3 + k_iter] * d_A[(i-1) * 3 + j];	//a a 00-ból kell induljon
+						intersum += k[j*3 + k_iter] * const_d_A[(i-1) * 3 + j];	//a a 00-ból kell induljon
 					}
 					
 					x[k_iter] = X[k_iter] + h  * intersum;
@@ -164,7 +167,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N, float* d
 				intersum = 0;
 
 				for (int j = 0; j < RK_ORDER; j++){
-					intersum += d_B[j] * k[3*j + i]; 
+					intersum += const_d_B[j] * k[3*j + i]; 
 				}
 				
 				X[i] = X[i] + h * intersum;
