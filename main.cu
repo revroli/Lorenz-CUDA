@@ -176,8 +176,8 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 
 			//unroll ended
 
-			#pragma unroll
-			for (int i = 0; i < 3; i++){
+			//#pragma unroll
+			//for (int i = 0; i < 3; i++){
 				//intersum = 0;
 
 /* 				#pragma unroll
@@ -186,9 +186,13 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 				}
 				
 				X[i] = X[i] + h * intersum; */
-				X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+				//X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
 
-			}
+			//}
+
+			X[0] += h * (const_d_B[0] * k[0] + const_d_B[1] * k[3] + const_d_B[2] * k[6] + const_d_B[3] * k[9]); 
+			X[1] += h * (const_d_B[0] * k[1] + const_d_B[1] * k[4] + const_d_B[2] * k[7] + const_d_B[3] * k[10]); 
+			X[2] += h * (const_d_B[0] * k[2] + const_d_B[1] * k[5] + const_d_B[2] * k[8] + const_d_B[3] * k[11]); 
 
 			T += h; //kihagyható amúgy
 		}
