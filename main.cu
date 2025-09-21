@@ -9,6 +9,8 @@
 #define RK_ORDER 4
 #define BUTCHER_SIZE RK_ORDER + 1
 
+#define h 0.001
+
 using namespace std;
 
 __device__ void Lorenz(float*, float*, float);
@@ -26,6 +28,8 @@ int main()
 	int BlockSize  = 128;
 	int GridSize = Resolution/BlockSize + (Resolution % BlockSize == 0 ? 0:1);
 	
+
+	//Choose GPU
 	ListCUDADevices();
 	
 	int MajorRevision  = 8;
@@ -35,17 +39,19 @@ int main()
 	PrintPropertiesOfSpecificDevice(SelectedDevice);
 	cudaSetDevice(SelectedDevice);
 	
+	//Allocate CPU memory
 	float* h_State      = (float*)aligned_alloc(64, 3*Resolution * sizeof(float));
 	float* h_Parameters = (float*)aligned_alloc(64,   Resolution * sizeof(float));
 	float* h_A = (float*)aligned_alloc(64,   (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float));
 	float* h_B = (float*)aligned_alloc(64,   RK_ORDER * sizeof(float));
 
+	//Allocate GPU memory (constant memory doesn't need allocation)
 	float* d_State;
 	float* d_Parameters;
 	cudaMalloc((void**)&d_State,      3*Resolution * sizeof(float));
 	cudaMalloc((void**)&d_Parameters,   Resolution * sizeof(float));
 
-	// Initialisation
+	// Initialization
 	Linspace(h_Parameters, 0.0, 40.0, Resolution);
 	for (int i = 1; i<Resolution; i++)
 	{
@@ -54,6 +60,7 @@ int main()
 		h_State[i+2*Resolution] =  0.0;
 	}	
 
+	//RK4 method parameters. Can be changed
 	h_A[0] = 0.5f; h_A[1] = 0.0f; h_A[2] = 0.0f;
 	h_A[3] = 0.0f; h_A[4] = 0.5f; h_A[5] = 0.0f;
 	h_A[6] = 0.0f; h_A[7] = 0.0f; h_A[8] = 1.0f;
@@ -119,9 +126,10 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 		//float intersum;
 		
 		float T = 0;
-		float h = 0.001; //DT
+		//float h = 0.001; //DT
 
 		//int i_minus;
+		int i = 0;
 		
 		for (int n=0; n<10000; n++)
 		{
@@ -152,7 +160,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 			}*/
 
 			#pragma unroll
-			for (int i = 0; i<3; i++)
+			for (i = 0; i<3; i++)
 			{
 				x[i] = X[i] + h * (k[i] * const_d_A[0]);
 			}
@@ -160,7 +168,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 			Lorenz(k + 3, x, P);
 			
 			#pragma unroll
-			for (int i = 0; i<3; i++)
+			for (i = 0; i<3; i++)
 			{
 				x[i] = X[i] + h * (k[0] * const_d_A[0] + k[3+i] * const_d_A[4]);
 			}
@@ -168,7 +176,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 			Lorenz(k + 6, x, P);
 			
 			#pragma unroll
-			for (int i = 0; i<3; i++)
+			for (i = 0; i<3; i++)
 			{
 				x[i] = X[i] + h * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
 			}
@@ -197,8 +205,8 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 
 			//unroll ended
 
-			//#pragma unroll
-			for (int i = 0; i < 3; i++){
+			#pragma unroll
+			for (i = 0; i < 3; i++){
 				//intersum = 0;
 
  				/*#pragma unroll
