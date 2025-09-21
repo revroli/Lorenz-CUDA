@@ -150,7 +150,7 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 				
 				Lorenz(k + 3*i, x, P);
 			}*/
-			#pragma unroll
+/* 			#pragma unroll
 			for (int i = 0; i<3; i++)
 			{
 				x[i] = X[i] + h * (k[i] * const_d_A[0]);
@@ -171,6 +171,26 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 			{
 				x[i] = X[i] + h * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
 			}
+
+			Lorenz(k + 9, x, P); */
+
+			x[0] = X[0] + h * (k[0] * const_d_A[0]);
+			x[1] = X[1] + h * (k[1] * const_d_A[0]);
+			x[2] = X[2] + h * (k[2] * const_d_A[0]);
+			
+			Lorenz(k + 3, x, P);
+			
+
+			x[0] = X[0] + h * (k[0] * const_d_A[0] + k[3] * const_d_A[4]);
+			x[1] = X[1] + h * (k[0] * const_d_A[0] + k[4] * const_d_A[4]);
+			x[2] = X[2] + h * (k[0] * const_d_A[0] + k[5] * const_d_A[4]);
+
+			Lorenz(k + 6, x, P);
+			
+
+			x[0] = X[0] + h * (k[0] * const_d_A[0] + k[3] * const_d_A[4] + k[6] * const_d_A[8]);
+			x[1] = X[1] + h * (k[1] * const_d_A[0] + k[4] * const_d_A[4] + k[7] * const_d_A[8]);
+			x[2] = X[2] + h * (k[2] * const_d_A[0] + k[5] * const_d_A[4] + k[8] * const_d_A[8]);
 
 			Lorenz(k + 9, x, P);
 
