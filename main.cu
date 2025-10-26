@@ -374,6 +374,61 @@ __global__ void RungeKutta_Baseline(float* d_State, float* d_Parameters, int N){
 	}
 }
 
+__global__ void RungeKutta_Baseline_with_zeros(float* d_State, float* d_Parameters, int N){
+	int tid = threadIdx.x + blockIdx.x*blockDim.x;
+	
+	if (tid < N)
+	{
+		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
+
+		float P = d_Parameters[tid];
+		
+		float k1[3];
+		float k2[3];
+		float k3[3];
+		float k4[3];
+		float x[3];
+		
+		float T    = 0; 
+		float h   = 0.001;
+		//float dTp2 = 0.0005;  //0.5*dT
+		//float dTp6 = dT * (float(1)/6);
+		
+		for (int i=0; i<10000; i++)
+		{
+			Lorenz(k1, X, P);
+			
+			#pragma unroll
+			for (int j=0; j<3; j++)
+				x[j] = X[j] + float(0.5)*h*k1[j]; //dTp2 = a21*h
+			
+			Lorenz(k2, x, P);
+			
+			#pragma unroll
+			for (int j=0; j<3; j++)
+				x[j] = X[j] + float(0)*h*k1[j] + float(0.5)*h*k2[j]; //dTp2 = a32*h; a31 = 0
+			
+			Lorenz(k3, x, P);
+			
+			#pragma unroll
+			for (int j=0; j<3; j++)
+				x[j] = X[j] + float(0)*h*k1[j] + float(0)*h*k2[j] + float(1)*h*k3[j]; //dT = a43 * h; a41, a42 = 0
+			
+			Lorenz(k4, x, P);
+			
+			// Update state
+			#pragma unroll
+			for (int j=0; j<3; j++)
+				X[j] = X[j] + h*(float(0.16161616)*k1[j] + float(0.33333333)*k2[j] + float(0.33333333)*k3[j] + float(0.16161616)*k4[j]);
+			
+			T += dT;
+		}
+		
+		d_State[tid] = X[0];
+		d_State[tid + N] = X[1];
+		d_State[tid + 2*N] = X[2];
+	}
+}
 
 void Linspace(float* x, float B, float E, int N)
 {
