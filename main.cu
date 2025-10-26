@@ -84,7 +84,7 @@ int main()
 	cudaMemcpyToSymbol(const_d_B, h_B, sizeof(float) * RK_ORDER);
 
 	//Kernel run
-	RungeKutta_Baseline<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
+	RungeKutta_Baseline_with_zeros<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
 	cudaDeviceSynchronize();
 	
 	//Save the products
@@ -108,9 +108,9 @@ int main()
 
 __forceinline__ __device__ void Lorenz(float* F, float* X, float P)
 {
-	F[0] = float(10)*(X[1] - X[0]);
-	F[1] = P*X[0] - X[1] - X[0]*X[2];
-	F[2] = X[0]*X[1] - float(2.666) * X[2];
+	F[0] = float(10)*(X[1] - X[0]);			//FMUL, FADD
+	F[1] = P*X[0] - X[1] - X[0]*X[2];		//FMA, FMA
+	F[2] = X[0]*X[1] - float(2.666) * X[2];	//FMUL, FMA
 }
 
 __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters, int N){
@@ -284,7 +284,7 @@ __global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parame
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
-				x[i] = X[i] + H * (k[i] * const_d_A[0]);
+				x[i] = X[i] + H * (k[i] * const_d_A[0]);	//FMA, FMUL 
 			}
 
 			Lorenz(k + 3, x, P);
@@ -292,7 +292,7 @@ __global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parame
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
-				x[i] = X[i] + H * (k[0] * const_d_A[0] + k[3+i] * const_d_A[4]);
+				x[i] = X[i] + H * (k[0] * const_d_A[0] + k[3+i] * const_d_A[4]);	//FMA, FMUL, FADD, FMA
 			}
 
 			Lorenz(k + 6, x, P);
@@ -300,18 +300,18 @@ __global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parame
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
-				x[i] = X[i] + H * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
+				x[i] = X[i] + H * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);	//FMA, FMUL, FADD, FMA, FADD, FMA
 			}
 
 			Lorenz(k + 9, x, P);
 
 			#pragma unroll
 			for (i = 0; i < 3; i++){
-				X[i] += H * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+				X[i] += H * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); //FMA, FMUL, FADD, FMA, FADD, FMA, FADD, FMA
 			}
 
 
-			T += H; //kihagyható amúgy
+			T += H; //kihagyható amúgy	//FADD
 		}
 		
 		d_State[tid] = X[0];
@@ -408,13 +408,13 @@ __global__ void RungeKutta_Baseline_with_zeros(float* d_State, float* d_Paramete
 			
 			#pragma unroll
 			for (int j=0; j<3; j++)
-				x[j] = X[j] + float(0)*H*k1[j] + float(0.5)*H*k2[j]; //dTp2 = a32*h; a31 = 0
+				x[j] = X[j] + H*(float(0)*k1[j] + float(0.5)*k2[j]); //dTp2 = a32*h; a31 = 0
 			
 			Lorenz(k3, x, P);
 			
 			#pragma unroll
 			for (int j=0; j<3; j++)
-				x[j] = X[j] + float(0)*H*k1[j] + float(0)*H*k2[j] + float(1)*H*k3[j]; //dT = a43 * h; a41, a42 = 0
+				x[j] = X[j] + H*(float(0)*k1[j] + float(0)*k2[j] + float(1)*k3[j]); //dT = a43 * h; a41, a42 = 0
 			
 			Lorenz(k4, x, P);
 			
