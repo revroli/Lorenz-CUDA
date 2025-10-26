@@ -408,13 +408,13 @@ __global__ void RungeKutta_Baseline_with_zeros(float* d_State, float* d_Paramete
 			
 			#pragma unroll
 			for (int j=0; j<3; j++)
-				x[j] = X[j] + H*(float(0)*k1[j] + float(0.5)*k2[j]); //dTp2 = a32*h; a31 = 0
+				x[j] = X[j] + float(0)*H*k1[j] + float(0.5)*H*k2[j]; //dTp2 = a32*h; a31 = 0
 			
 			Lorenz(k3, x, P);
 			
 			#pragma unroll
 			for (int j=0; j<3; j++)
-				x[j] = X[j] + H*(float(0)*k1[j] + float(0)*k2[j] + float(1)*k3[j]); //dT = a43 * h; a41, a42 = 0
+				x[j] = X[j] + float(0)*H*k1[j] + float(0)*H*k2[j] + float(1)*H*k3[j]; //dT = a43 * h; a41, a42 = 0
 			
 			Lorenz(k4, x, P);
 			
