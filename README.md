@@ -10,4 +10,4 @@ To compile the code, run in the terminal:
 make SRC=your_source_file.cu
 ```
 
-If SRC is not specified, it will compile `main.cu` by default.
+If SRC is not specified, it will compile `main.cu` by default. Add the -B flag to force recompilation.

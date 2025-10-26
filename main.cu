@@ -18,6 +18,8 @@ __device__ void Lorenz(float*, float*, float);
 __global__ void RungeKutta_Butcher_nounroll(float*, float*, int);
 __global__ void RungeKutta_Butcher_unrolled(float*, float*, int);
 __global__ void RungeKutta_Butcher_half_unrolled(float*, float*, int);
+__global__ void RungeKutta_Baseline(float*, float*, int);
+__global__ void RungeKutta_Baseline_with_zeros(float*, float*, int);
 
 void Linspace(float*, float, float, int);
 
@@ -82,7 +84,7 @@ int main()
 	cudaMemcpyToSymbol(const_d_B, h_B, sizeof(float) * RK_ORDER);
 
 	//Kernel run
-	RungeKutta_Butcher_nounroll<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
+	RungeKutta_Baseline<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
 	cudaDeviceSynchronize();
 	
 	//Save the products
@@ -125,12 +127,12 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 
 		float k[RK_ORDER * 3];		//hogyan rendezem? legyen [iteráció][x-dimenzió]
 		float x[3];
-		//float intersum;
+		float intersum;
 		
 		float T = 0;
 		//float h = 0.001; //DT
 
-		//int i_minus;
+		int i_minus;
 		int i = 0;
 		
 		for (int n=0; n<ITERATIONS; n++) // több időlépés?; belső időmérések?
@@ -181,7 +183,6 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 		d_State[tid + 2*N] = X[2];
 	}
 }
-
 
 __global__ void RungeKutta_Butcher_unrolled(float* d_State, float* d_Parameters, int N){
 	int tid = threadIdx.x + blockIdx.x*blockDim.x;
