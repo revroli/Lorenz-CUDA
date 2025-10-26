@@ -14,7 +14,9 @@
 using namespace std;
 
 __device__ void Lorenz(float*, float*, float);
-__global__ void RungeKutta4(float*, float*, int);
+__global__ void RungeKutta_Butcher_nounroll(float*, float*, int);
+__global__ void RungeKutta_Butcher_unrolled(float*, float*, int);
+__global__ void RungeKutta_Butcher_half_unrolled(float*, float*, int);
 
 void Linspace(float*, float, float, int);
 
@@ -79,7 +81,7 @@ int main()
 	cudaMemcpyToSymbol(const_d_B, h_B, sizeof(float) * RK_ORDER);
 
 	//Kernel run
-	RungeKutta4<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution);
+	RungeKutta_Butcher_nounroll<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
 	cudaDeviceSynchronize();
 	
 	//Save the products
@@ -108,7 +110,7 @@ __forceinline__ __device__ void Lorenz(float* F, float* X, float P)
 	F[2] = X[0]*X[1] - float(2.666) * X[2];
 }
 
-__global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
+__global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters, int N)
 {
 	int tid = threadIdx.x + blockIdx.x*blockDim.x;
 	
@@ -131,11 +133,13 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 		//int i_minus;
 		int i = 0;
 		
-		for (int n=0; n<10000; n++)
+		for (int n=0; n<10000; n++) // több időlépés?; belső időmérések?
 		{
 			Lorenz(k, X, P);		//kn1
 
-			/*#pragma unroll
+			// másik kernelbe átírni
+
+			#pragma unroll
 			for (int i = 1; i < RK_ORDER; i++){
 				
 				i_minus = i-1;
@@ -145,7 +149,10 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 
 					intersum = 0;
 
-					#pragma unroll
+					#pragma unroll  //enélkül van-e különbség. Fordítási időben ismert indexek -> registerbe bent maradjon -> látni a registerhasználat változását
+									//belső chrono időmérés
+									//fordítási opciók
+									//kiírt dolgokat textfájlba kimenteni
 					for (int j=0; j < i; j++){
 						intersum += k[j*3 + k_iter] * const_d_A[(i_minus) * 3 + j];	//a a 00-ból kell induljon 
 																//ezt átírni valahogy 1 MA-ra?
@@ -157,8 +164,52 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 				}	
 				
 				Lorenz(k + 3*i, x, P);
-			}*/
+			}
+			
 
+			#pragma unroll
+			for (i = 0; i < 3; i++){
+				X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+			}
+
+
+			T += h; //kihagyható amúgy
+		}
+		
+		d_State[tid] = X[0];
+		d_State[tid + N] = X[1];
+		d_State[tid + 2*N] = X[2];
+	}
+}
+
+
+__global__ void RungeKutta_Butcher_unrolled(float* d_State, float* d_Parameters, int N)
+{
+	int tid = threadIdx.x + blockIdx.x*blockDim.x;
+	
+	if (tid < N)
+	{
+		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
+
+		float P = d_Parameters[tid];
+		
+		// van egy k vector
+		//implicitet nem lehet így kiszámolni, úgyhogy csak az explicitet számoljuk
+
+		float k[RK_ORDER * 3];		//hogyan rendezem? legyen [iteráció][x-dimenzió]
+		float x[3];
+		//float intersum;
+		
+		float T = 0;
+		//float h = 0.001; //DT
+
+		//int i_minus;
+		int i = 0;
+		
+		for (int n=0; n<10000; n++) // több időlépés?; belső időmérések?
+		{
+			Lorenz(k, X, P);		//kn1
+			
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
@@ -183,44 +234,83 @@ __global__ void RungeKutta4(float* d_State, float* d_Parameters, int N)
 
 			Lorenz(k + 9, x, P);
 
-/* 			x[0] = X[0] + h * (k[0] * const_d_A[0]);
-			x[1] = X[1] + h * (k[1] * const_d_A[0]);
-			x[2] = X[2] + h * (k[2] * const_d_A[0]);
-			
-			Lorenz(k + 3, x, P);
-			
-
-			x[0] = X[0] + h * (k[0] * const_d_A[0] + k[3] * const_d_A[4]);
-			x[1] = X[1] + h * (k[0] * const_d_A[0] + k[4] * const_d_A[4]);
-			x[2] = X[2] + h * (k[0] * const_d_A[0] + k[5] * const_d_A[4]);
-
-			Lorenz(k + 6, x, P);
-			
-
-			x[0] = X[0] + h * (k[0] * const_d_A[0] + k[3] * const_d_A[4] + k[6] * const_d_A[8]);
-			x[1] = X[1] + h * (k[1] * const_d_A[0] + k[4] * const_d_A[4] + k[7] * const_d_A[8]);
-			x[2] = X[2] + h * (k[2] * const_d_A[0] + k[5] * const_d_A[4] + k[8] * const_d_A[8]);
-
-			Lorenz(k + 9, x, P); */
-
 			//unroll ended
 
 			#pragma unroll
 			for (i = 0; i < 3; i++){
-				//intersum = 0;
 
- 				/*#pragma unroll
-				for (int j = 0; j < RK_ORDER; j++){
-					intersum += const_d_B[j] * k[3*j + i]; 
-				}
-				
-				X[i] = X[i] + h * intersum;*/
 				X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
 			}
 
-/* 			X[0] += h * (const_d_B[0] * k[0] + const_d_B[1] * k[3] + const_d_B[2] * k[6] + const_d_B[3] * k[9]); 
+ 			X[0] += h * (const_d_B[0] * k[0] + const_d_B[1] * k[3] + const_d_B[2] * k[6] + const_d_B[3] * k[9]); 
 			X[1] += h * (const_d_B[0] * k[1] + const_d_B[1] * k[4] + const_d_B[2] * k[7] + const_d_B[3] * k[10]); 
-			X[2] += h * (const_d_B[0] * k[2] + const_d_B[1] * k[5] + const_d_B[2] * k[8] + const_d_B[3] * k[11]);  */
+			X[2] += h * (const_d_B[0] * k[2] + const_d_B[1] * k[5] + const_d_B[2] * k[8] + const_d_B[3] * k[11]);
+
+			T += h; //kihagyható amúgy
+		}
+		
+		d_State[tid] = X[0];
+		d_State[tid + N] = X[1];
+		d_State[tid + 2*N] = X[2];
+	}
+}
+
+__global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parameters, int N)
+{
+	int tid = threadIdx.x + blockIdx.x*blockDim.x;
+	
+	if (tid < N)
+	{
+		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
+
+		float P = d_Parameters[tid];
+		
+		// van egy k vector
+		//implicitet nem lehet így kiszámolni, úgyhogy csak az explicitet számoljuk
+
+		float k[RK_ORDER * 3];		//hogyan rendezem? legyen [iteráció][x-dimenzió]
+		float x[3];
+		//float intersum;
+		
+		float T = 0;
+		//float h = 0.001; //DT
+
+		//int i_minus;
+		int i = 0;
+		
+		for (int n=0; n<10000; n++) // több időlépés?; belső időmérések?
+		{
+			Lorenz(k, X, P);		//kn1
+			
+			#pragma unroll
+			for (i = 0; i<3; i++)
+			{
+				x[i] = X[i] + h * (k[i] * const_d_A[0]);
+			}
+
+			Lorenz(k + 3, x, P);
+			
+			#pragma unroll
+			for (i = 0; i<3; i++)
+			{
+				x[i] = X[i] + h * (k[0] * const_d_A[0] + k[3+i] * const_d_A[4]);
+			}
+
+			Lorenz(k + 6, x, P);
+			
+			#pragma unroll
+			for (i = 0; i<3; i++)
+			{
+				x[i] = X[i] + h * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
+			}
+
+			Lorenz(k + 9, x, P);
+
+			#pragma unroll
+			for (i = 0; i < 3; i++){
+				X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+			}
+
 
 			T += h; //kihagyható amúgy
 		}
