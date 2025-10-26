@@ -110,8 +110,7 @@ __forceinline__ __device__ void Lorenz(float* F, float* X, float P)
 	F[2] = X[0]*X[1] - float(2.666) * X[2];
 }
 
-__global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters, int N)
-{
+__global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters, int N){
 	int tid = threadIdx.x + blockIdx.x*blockDim.x;
 	
 	if (tid < N)
@@ -183,8 +182,7 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 }
 
 
-__global__ void RungeKutta_Butcher_unrolled(float* d_State, float* d_Parameters, int N)
-{
+__global__ void RungeKutta_Butcher_unrolled(float* d_State, float* d_Parameters, int N){
 	int tid = threadIdx.x + blockIdx.x*blockDim.x;
 	
 	if (tid < N)
@@ -255,8 +253,7 @@ __global__ void RungeKutta_Butcher_unrolled(float* d_State, float* d_Parameters,
 	}
 }
 
-__global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parameters, int N)
-{
+__global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parameters, int N){
 	int tid = threadIdx.x + blockIdx.x*blockDim.x;
 	
 	if (tid < N)
@@ -320,6 +317,63 @@ __global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parame
 		d_State[tid + 2*N] = X[2];
 	}
 }
+
+__global__ void RungeKutta_Baseline(float* d_State, float* d_Parameters, int N){
+	int tid = threadIdx.x + blockIdx.x*blockDim.x;
+	
+	if (tid < N)
+	{
+		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
+
+		float P = d_Parameters[tid];
+		
+		float k1[3];
+		float k2[3];
+		float k3[3];
+		float k4[3];
+		float x[3];
+		
+		float T    = 0; 
+		float dT   = 0.001;
+		float dTp2 = 0.0005;  //0.5*dT
+		float dTp6 = dT * (float(1)/6);
+		
+		for (int i=0; i<10000; i++)
+		{
+			Lorenz(k1, X, P);
+			
+			#pragma unroll
+			for (int j=0; j<3; j++)
+				x[j] = X[j] + dTp2*k1[j];
+			
+			Lorenz(k2, x, P);
+			
+			#pragma unroll
+			for (int j=0; j<3; j++)
+				x[j] = X[j] + dTp2*k2[j];
+			
+			Lorenz(k3, x, P);
+			
+			#pragma unroll
+			for (int j=0; j<3; j++)
+				x[j] = X[j] + dT*k3[j];
+			
+			Lorenz(k4, x, P);
+			
+			// Update state
+			#pragma unroll
+			for (int j=0; j<3; j++)
+				X[j] = X[j] + dTp6*( k1[j] + 2*k2[j] + 2*k3[j] + k4[j] );
+			
+			T += dT;
+		}
+		
+		d_State[tid] = X[0];
+		d_State[tid + N] = X[1];
+		d_State[tid + 2*N] = X[2];
+	}
+}
+
 
 void Linspace(float* x, float B, float E, int N)
 {
