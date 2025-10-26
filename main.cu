@@ -9,7 +9,8 @@
 #define RK_ORDER 4
 #define BUTCHER_SIZE RK_ORDER + 1
 
-#define h 0.001f // [s]
+#define H 0.001f // [s]
+#define ITERATIONS 10000
 
 using namespace std;
 
@@ -132,7 +133,7 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 		//int i_minus;
 		int i = 0;
 		
-		for (int n=0; n<10000; n++) // több időlépés?; belső időmérések?
+		for (int n=0; n<ITERATIONS; n++) // több időlépés?; belső időmérések?
 		{
 			Lorenz(k, X, P);		//kn1
 
@@ -159,7 +160,7 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 																//(i-1)*-at elég lehet csak 1-szer kiszámolni
 					}
 					
-					x[k_iter] = X[k_iter] + h  * intersum;
+					x[k_iter] = X[k_iter] + H  * intersum;
 				}	
 				
 				Lorenz(k + 3*i, x, P);
@@ -168,11 +169,11 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 
 			#pragma unroll
 			for (i = 0; i < 3; i++){
-				X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+				X[i] += H * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
 			}
 
 
-			T += h; //kihagyható amúgy
+			T += H; //kihagyható amúgy
 		}
 		
 		d_State[tid] = X[0];
@@ -204,14 +205,14 @@ __global__ void RungeKutta_Butcher_unrolled(float* d_State, float* d_Parameters,
 		//int i_minus;
 		int i = 0;
 		
-		for (int n=0; n<10000; n++) // több időlépés?; belső időmérések?
+		for (int n=0; n<ITERATIONS; n++) // több időlépés?; belső időmérések?
 		{
 			Lorenz(k, X, P);		//kn1
 			
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
-				x[i] = X[i] + h * (k[i] * const_d_A[0]);
+				x[i] = X[i] + H * (k[i] * const_d_A[0]);
 			}
 
 			Lorenz(k + 3, x, P);
@@ -219,7 +220,7 @@ __global__ void RungeKutta_Butcher_unrolled(float* d_State, float* d_Parameters,
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
-				x[i] = X[i] + h * (k[0] * const_d_A[0] + k[3+i] * const_d_A[4]);
+				x[i] = X[i] + H * (k[0] * const_d_A[0] + k[3+i] * const_d_A[4]);
 			}
 
 			Lorenz(k + 6, x, P);
@@ -227,7 +228,7 @@ __global__ void RungeKutta_Butcher_unrolled(float* d_State, float* d_Parameters,
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
-				x[i] = X[i] + h * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
+				x[i] = X[i] + H * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
 			}
 
 			Lorenz(k + 9, x, P);
@@ -237,14 +238,14 @@ __global__ void RungeKutta_Butcher_unrolled(float* d_State, float* d_Parameters,
 			#pragma unroll
 			for (i = 0; i < 3; i++){
 
-				X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+				X[i] += H * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
 			}
 
- 			X[0] += h * (const_d_B[0] * k[0] + const_d_B[1] * k[3] + const_d_B[2] * k[6] + const_d_B[3] * k[9]); 
-			X[1] += h * (const_d_B[0] * k[1] + const_d_B[1] * k[4] + const_d_B[2] * k[7] + const_d_B[3] * k[10]); 
-			X[2] += h * (const_d_B[0] * k[2] + const_d_B[1] * k[5] + const_d_B[2] * k[8] + const_d_B[3] * k[11]);
+ 			X[0] += H * (const_d_B[0] * k[0] + const_d_B[1] * k[3] + const_d_B[2] * k[6] + const_d_B[3] * k[9]); 
+			X[1] += H * (const_d_B[0] * k[1] + const_d_B[1] * k[4] + const_d_B[2] * k[7] + const_d_B[3] * k[10]); 
+			X[2] += H * (const_d_B[0] * k[2] + const_d_B[1] * k[5] + const_d_B[2] * k[8] + const_d_B[3] * k[11]);
 
-			T += h; //kihagyható amúgy
+			T += H; //kihagyható amúgy
 		}
 		
 		d_State[tid] = X[0];
@@ -275,14 +276,14 @@ __global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parame
 		//int i_minus;
 		int i = 0;
 		
-		for (int n=0; n<10000; n++) // több időlépés?; belső időmérések?
+		for (int n=0; n<ITERATIONS; n++) // több időlépés?; belső időmérések?
 		{
 			Lorenz(k, X, P);		//kn1
 			
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
-				x[i] = X[i] + h * (k[i] * const_d_A[0]);
+				x[i] = X[i] + H * (k[i] * const_d_A[0]);
 			}
 
 			Lorenz(k + 3, x, P);
@@ -290,7 +291,7 @@ __global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parame
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
-				x[i] = X[i] + h * (k[0] * const_d_A[0] + k[3+i] * const_d_A[4]);
+				x[i] = X[i] + H * (k[0] * const_d_A[0] + k[3+i] * const_d_A[4]);
 			}
 
 			Lorenz(k + 6, x, P);
@@ -298,18 +299,18 @@ __global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parame
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
-				x[i] = X[i] + h * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
+				x[i] = X[i] + H * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
 			}
 
 			Lorenz(k + 9, x, P);
 
 			#pragma unroll
 			for (i = 0; i < 3; i++){
-				X[i] += h * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+				X[i] += H * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
 			}
 
 
-			T += h; //kihagyható amúgy
+			T += H; //kihagyható amúgy
 		}
 		
 		d_State[tid] = X[0];
@@ -338,7 +339,7 @@ __global__ void RungeKutta_Baseline(float* d_State, float* d_Parameters, int N){
 		float dTp2 = 0.0005;  //0.5*dT
 		float dTp6 = dT * (float(1)/6);
 		
-		for (int i=0; i<10000; i++)
+		for (int i=0; i<ITERATIONS; i++)
 		{
 			Lorenz(k1, X, P);
 			
@@ -390,38 +391,38 @@ __global__ void RungeKutta_Baseline_with_zeros(float* d_State, float* d_Paramete
 		float x[3];
 		
 		float T    = 0; 
-		float h   = 0.001;
+		//float h   = 0.001;
 		//float dTp2 = 0.0005;  //0.5*dT
 		//float dTp6 = dT * (float(1)/6);
 		
-		for (int i=0; i<10000; i++)
+		for (int i=0; i<ITERATIONS; i++)
 		{
 			Lorenz(k1, X, P);
 			
 			#pragma unroll
 			for (int j=0; j<3; j++)
-				x[j] = X[j] + float(0.5)*h*k1[j]; //dTp2 = a21*h
+				x[j] = X[j] + float(0.5)*H*k1[j]; //dTp2 = a21*h
 			
 			Lorenz(k2, x, P);
 			
 			#pragma unroll
 			for (int j=0; j<3; j++)
-				x[j] = X[j] + float(0)*h*k1[j] + float(0.5)*h*k2[j]; //dTp2 = a32*h; a31 = 0
+				x[j] = X[j] + float(0)*H*k1[j] + float(0.5)*H*k2[j]; //dTp2 = a32*h; a31 = 0
 			
 			Lorenz(k3, x, P);
 			
 			#pragma unroll
 			for (int j=0; j<3; j++)
-				x[j] = X[j] + float(0)*h*k1[j] + float(0)*h*k2[j] + float(1)*h*k3[j]; //dT = a43 * h; a41, a42 = 0
+				x[j] = X[j] + float(0)*H*k1[j] + float(0)*H*k2[j] + float(1)*H*k3[j]; //dT = a43 * h; a41, a42 = 0
 			
 			Lorenz(k4, x, P);
 			
 			// Update state
 			#pragma unroll
 			for (int j=0; j<3; j++)
-				X[j] = X[j] + h*(float(0.16161616)*k1[j] + float(0.33333333)*k2[j] + float(0.33333333)*k3[j] + float(0.16161616)*k4[j]);
+				X[j] = X[j] + H*(float(0.16161616)*k1[j] + float(0.33333333)*k2[j] + float(0.33333333)*k3[j] + float(0.16161616)*k4[j]);
 			
-			T += dT;
+			T += H;
 		}
 		
 		d_State[tid] = X[0];
