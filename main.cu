@@ -139,33 +139,25 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 		
 		for (int n=0; n<ITERATIONS; n++) // több időlépés?; belső időmérések?
 		{
-			Lorenz(k, X, P);		//kn1
-
-			// másik kernelbe átírni
-
 			#pragma unroll
-			for (int i = 1; i < RK_ORDER; i++){
+			for (int i = 0; i < RK_STAGE; i++){ //Azért 1-től kezdődik, mert a 0-dik sorát már előbb kiszámoiltuk
 				
-				i_minus = i-1;
-
-				#pragma unroll
-				for (int k_iter = 0; k_iter < 3; k_iter++){
+				#pragma unroll	
+				for (int k_iter = 0; k_iter < SYS_DIM; k_iter++){		//gyorsabb különszedve a 2 for loop
 
 					x[k_iter] = X[k_iter];
+				}
 
-					#pragma unroll  //enélkül van-e különbség. Fordítási időben ismert indexek -> registerbe bent maradjon -> látni a registerhasználat változását
-									//belső chrono időmérés
-									//fordítási opciók
-									//kiírt dolgokat textfájlba kimenteni
-					for (int j=0; j < i; j++){
-						x[k_iter] = x[k_iter] + k[j*3 + k_iter] * const_d_A[(i_minus) * 3 + j];	//a a 00-ból kell induljon 
-																//ezt átírni valahogy 1 MA-ra?
-																// unrollal biztos kijön
-																//(i-1)*-at elég lehet csak 1-szer kiszámolni
+				#pragma unroll
+				for (int k_iter = 0; k_iter < SYS_DIM; k_iter++){
+
+					#pragma unroll
+					for (int j=0; j < i; j++){	//indexelést kijavítani mátrixosra akár
+						x[k_iter] = x[k_iter] + k[j][k_iter] * const_d_A[i][j];
 					}
 				}	
 				
-				Lorenz(k + 3*i, x, P);
+				Lorenz(k[i], x, P);
 			}
 			
 
