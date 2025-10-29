@@ -162,9 +162,16 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 			
 
 			#pragma unroll
-			for (i = 0; i < 3; i++){
-				X[i] = X[i] + const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]; 
+			for (int j = 0; j < RK_STAGE; j++){
+				#pragma unroll
+				for (int i = 0; i < SYS_DIM; i++){
+					X[i] = X[i] + const_d_B[j] * k[j][i];
+				}
 			}
+
+			/*for (int i = 0; i < 3; i++){
+				X[i] = X[i] + const_d_B[0] * k[0][i] + const_d_B[1] * k[1][i] + const_d_B[2] * k[2][i] + const_d_B[3] * k[3][i]; 
+			}*/
 
 
 			T += H; //kihagyható amúgy
