@@ -16,12 +16,8 @@
 using namespace std;
 
 __device__ void Lorenz(float*, float*, float);
-__global__ void RungeKutta_Butcher_nounroll(float*, float*, int);
-__global__ void RungeKutta_Butcher_unrolled(float*, float*, int);
-__global__ void RungeKutta_Butcher_half_unrolled(float*, float*, int);
+__global__ void RungeKutta_Butcher(float*, float*, int);
 __global__ void RungeKutta_Baseline(float*, float*, int);
-__global__ void RungeKutta_Baseline_with_zeros_fast(float*, float*, int);
-__global__ void RungeKutta_Baseline_with_zeros_slow(float*, float*, int);
 
 void Linspace(float*, float, float, int);
 
@@ -87,7 +83,7 @@ int main()
 	cudaMemcpyToSymbol(const_d_B, h_B, RK_STAGE * sizeof(float));
 
 	//Kernel run
-	RungeKutta_Baseline_with_zeros_fast<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
+	RungeKutta_Butcher_nounroll<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
 	cudaDeviceSynchronize();
 	
 	//Save the products
@@ -116,7 +112,7 @@ __forceinline__ __device__ void Lorenz(float* F, float* X, float P)
 	F[2] = X[0]*X[1] - float(2.666) * X[2];	//FMUL, FMA
 }
 
-__global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters, int N){
+__global__ void RungeKutta_Butcher(float* d_State, float* d_Parameters, int N){
 	int tid = threadIdx.x + blockIdx.x*blockDim.x;
 	
 	if (tid < N)
@@ -179,141 +175,6 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 	}
 }
 
-__global__ void RungeKutta_Butcher_unrolled(float* d_State, float* d_Parameters, int N){
-	int tid = threadIdx.x + blockIdx.x*blockDim.x;
-	
-	if (tid < N)
-	{
-		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
-
-		float P = d_Parameters[tid];
-		
-		// van egy k vector
-		//implicitet nem lehet így kiszámolni, úgyhogy csak az explicitet számoljuk
-
-		float k[RK_ORDER * 3];		//hogyan rendezem? legyen [iteráció][x-dimenzió]
-		float x[3];
-		//float intersum;
-		
-		float T = 0;
-		//float h = 0.001; //DT
-
-		//int i_minus;
-		int i = 0;
-		
-		for (int n=0; n<ITERATIONS; n++) // több időlépés?; belső időmérések?
-		{
-			Lorenz(k, X, P);		//kn1
-			
-			#pragma unroll
-			for (i = 0; i<3; i++)
-			{
-				x[i] = X[i] + H * (k[i] * const_d_A[0]);
-			}
-
-			Lorenz(k + 3, x, P);
-			
-			#pragma unroll
-			for (i = 0; i<3; i++)
-			{
-				x[i] = X[i] + H * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4]);
-			}
-
-			Lorenz(k + 6, x, P);
-			
-			#pragma unroll
-			for (i = 0; i<3; i++)
-			{
-				x[i] = X[i] + H * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4] + k[6 + i] * const_d_A[8]);
-			}
-
-			Lorenz(k + 9, x, P);
-
-			//unroll ended
-
-			#pragma unroll
-			for (i = 0; i < 3; i++){
-
-				X[i] += H * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
-			}
-
- 			X[0] += H * (const_d_B[0] * k[0] + const_d_B[1] * k[3] + const_d_B[2] * k[6] + const_d_B[3] * k[9]); 
-			X[1] += H * (const_d_B[0] * k[1] + const_d_B[1] * k[4] + const_d_B[2] * k[7] + const_d_B[3] * k[10]); 
-			X[2] += H * (const_d_B[0] * k[2] + const_d_B[1] * k[5] + const_d_B[2] * k[8] + const_d_B[3] * k[11]);
-
-			T += H; //kihagyható amúgy
-		}
-		
-		d_State[tid] = X[0];
-		d_State[tid + N] = X[1];
-		d_State[tid + 2*N] = X[2];
-	}
-}
-
-__global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parameters, int N){
-	int tid = threadIdx.x + blockIdx.x*blockDim.x;
-	
-	if (tid < N)
-	{
-		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
-
-		float P = d_Parameters[tid];
-		
-		// van egy k vector
-		//implicitet nem lehet így kiszámolni, úgyhogy csak az explicitet számoljuk
-
-		float k[RK_ORDER * 3];		//hogyan rendezem? legyen [iteráció][x-dimenzió]
-		float x[3];
-		//float intersum;
-		
-		float T = 0;
-		//float h = 0.001; //DT
-
-		//int i_minus;
-		int i = 0;
-		
-		for (int n=0; n<ITERATIONS; n++) // több időlépés?; belső időmérések?
-		{
-			Lorenz(k, X, P);		//kn1
-			
-			#pragma unroll
-			for (i = 0; i<3; i++)
-			{
-				x[i] = k[i] * const_d_A[0] + X[i];	//FMA, FMUL 
-			}
-
-			Lorenz(k + 3, x, P);	//FADD
-			
-			#pragma unroll
-			for (i = 0; i<3; i++)
-			{
-				x[i] = X[i] + k[i] * const_d_A[3] + k[3+i] * const_d_A[4];	//FMA, FMUL, FADD, FMA
-			}
-
-			Lorenz(k + 6, x, P);	//FADD
-			
-			#pragma unroll
-			for (i = 0; i<3; i++)
-			{
-				x[i] = X[i] + k[i] * const_d_A[6] + k[3+i] * const_d_A[7] + k[6 + i] * const_d_A[8];	//FMA, FMUL, FADD, FMA, FADD, FMA
-			}
-
-			Lorenz(k + 9, x, P);	//FADD
-
-			#pragma unroll
-			for (i = 0; i < 3; i++){
-				X[i] = X[i] + const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]; //FMA, FMUL, FADD, FMA, FADD, FMA, FADD, FMA
-			}
-
-			T += H; //kihagyható amúgy	//FADD
-		}
-		
-		d_State[tid] = X[0];
-		d_State[tid + N] = X[1];
-		d_State[tid + 2*N] = X[2];
-	}
-}
-
 __global__ void RungeKutta_Baseline(float* d_State, float* d_Parameters, int N){
 	int tid = threadIdx.x + blockIdx.x*blockDim.x;
 	
@@ -329,10 +190,10 @@ __global__ void RungeKutta_Baseline(float* d_State, float* d_Parameters, int N){
 		float k4[3];
 		float x[3];
 		
-		float T    = 0; 
-		float dT   = 0.001;
-		float dTp2 = 0.0005;  //0.5*dT
-		float dTp6 = dT * (float(1)/6);
+		float T    = 0.0f; 
+		float dT   = 0.001f;
+		float dTp2 = 0.0005f;  //0.5*dT
+		float dTp6 = dT * (1.0f/6.0f);
 		
 		for (int i=0; i<ITERATIONS; i++)
 		{
@@ -359,120 +220,9 @@ __global__ void RungeKutta_Baseline(float* d_State, float* d_Parameters, int N){
 			// Update state
 			#pragma unroll
 			for (int j=0; j<3; j++)
-				X[j] = X[j] + dTp6*( k1[j] + 2*k2[j] + 2*k3[j] + k4[j] );
+				X[j] = X[j] + dTp6*( k1[j] + 2.0f*k2[j] + 2.0f*k3[j] + k4[j] );
 			
 			T += dT;
-		}
-		
-		d_State[tid] = X[0];
-		d_State[tid + N] = X[1];
-		d_State[tid + 2*N] = X[2];
-	}
-}
-
-__global__ void RungeKutta_Baseline_with_zeros_fast(float* d_State, float* d_Parameters, int N){
-	int tid = threadIdx.x + blockIdx.x*blockDim.x;
-	
-	if (tid < N)
-	{
-		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
-
-		float P = d_Parameters[tid];
-		
-		float k1[3];
-		float k2[3];
-		float k3[3];
-		float k4[3];
-		float x[3];
-		
-		float T    = 0; 
-		//float h   = 0.001;
-		//float dTp2 = 0.0005;  //0.5*dT
-		//float dTp6 = dT * (float(1)/6);
-		
-		for (int i=0; i<ITERATIONS; i++)
-		{
-			Lorenz(k1, X, P);
-			
-			#pragma unroll
-			for (int j=0; j<3; j++)
-				x[j] = X[j] + float(0.5)*H*k1[j]; //dTp2 = a21*h	//FMA (Ha feltételezzük, hogy a compiler előre beszorozza a konstansokat)
-			
-			Lorenz(k2, x, P);
-			
-			#pragma unroll
-			for (int j=0; j<3; j++)
-				x[j] = X[j] + float(0)*H*k1[j] + float(0.5)*H*k2[j]; //dTp2 = a32*h; a31 = 0	//FMA, FMA
-			
-			Lorenz(k3, x, P);
-			
-			#pragma unroll
-			for (int j=0; j<3; j++)
-				x[j] = X[j] + float(0)*H*k1[j] + float(0)*H*k2[j] + float(1)*H*k3[j]; //dT = a43 * h; a41, a42 = 0	//FMA, FMA, FMA
-			
-			Lorenz(k4, x, P);
-			
-			// Update state
-			#pragma unroll
-			for (int j=0; j<3; j++)
-				X[j] = X[j] + H*float(0.16161616)*k1[j] + H*float(0.33333333)*k2[j] + H*float(0.33333333)*k3[j] + H*float(0.16161616)*k4[j];
-			
-			T += H;
-		}
-		
-		d_State[tid] = X[0];
-		d_State[tid + N] = X[1];
-		d_State[tid + 2*N] = X[2];
-	}
-}
-__global__ void RungeKutta_Baseline_with_zeros_slow(float* d_State, float* d_Parameters, int N){
-	int tid = threadIdx.x + blockIdx.x*blockDim.x;
-	
-	if (tid < N)
-	{
-		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
-
-		float P = d_Parameters[tid];
-		
-		float k1[3];
-		float k2[3];
-		float k3[3];
-		float k4[3];
-		float x[3];
-		
-		float T    = 0; 
-		//float h   = 0.001;
-		//float dTp2 = 0.0005;  //0.5*dT
-		//float dTp6 = dT * (float(1)/6);
-		
-		for (int i=0; i<ITERATIONS; i++)
-		{
-			Lorenz(k1, X, P);
-			
-			#pragma unroll
-			for (int j=0; j<3; j++)
-				x[j] = X[j] + H*float(0.5)*k1[j]; //dTp2 = a21*h	//FMA (Ha feltételezzük, hogy a compiler előre beszorozza a konstansokat)
-			
-			Lorenz(k2, x, P);
-			
-			#pragma unroll
-			for (int j=0; j<3; j++)
-				x[j] = X[j] + H*(float(0)*k1[j] + float(0.5)*k2[j]); //dTp2 = a32*h; a31 = 0	//FMA, FMA
-			
-			Lorenz(k3, x, P);
-			
-			#pragma unroll
-			for (int j=0; j<3; j++)
-				x[j] = X[j] + H*(float(0)*k1[j] + float(0)*k2[j] + float(1)*k3[j]); //dT = a43 * h; a41, a42 = 0	//FMA, FMA, FMA
-			
-			Lorenz(k4, x, P);
-			
-			// Update state
-			#pragma unroll
-			for (int j=0; j<3; j++)
-				X[j] = X[j] + H*(float(0.16161616)*k1[j] + float(0.33333333)*k2[j] + float(0.33333333)*k3[j] + float(0.16161616)*k4[j]);
-			
-			T += H;
 		}
 		
 		d_State[tid] = X[0];
