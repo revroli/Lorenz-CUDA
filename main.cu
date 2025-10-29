@@ -149,20 +149,18 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 				#pragma unroll
 				for (int k_iter = 0; k_iter < 3; k_iter++){
 
-					intersum = 0;
+					x[k_iter] = X[k_iter];
 
 					#pragma unroll  //enélkül van-e különbség. Fordítási időben ismert indexek -> registerbe bent maradjon -> látni a registerhasználat változását
 									//belső chrono időmérés
 									//fordítási opciók
 									//kiírt dolgokat textfájlba kimenteni
 					for (int j=0; j < i; j++){
-						intersum += k[j*3 + k_iter] * const_d_A[(i_minus) * 3 + j];	//a a 00-ból kell induljon 
+						x[k_iter] = x[k_iter] + k[j*3 + k_iter] * const_d_A[(i_minus) * 3 + j];	//a a 00-ból kell induljon 
 																//ezt átírni valahogy 1 MA-ra?
 																// unrollal biztos kijön
 																//(i-1)*-at elég lehet csak 1-szer kiszámolni
 					}
-					
-					x[k_iter] = X[k_iter] + H  * intersum;
 				}	
 				
 				Lorenz(k + 3*i, x, P);
@@ -171,7 +169,7 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 
 			#pragma unroll
 			for (i = 0; i < 3; i++){
-				X[i] += H * (const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]); 
+				X[i] = X[i] + const_d_B[0] * k[i] + const_d_B[1] * k[3 + i] + const_d_B[2] * k[6 + i] + const_d_B[3] * k[9 + i]; 
 			}
 
 
