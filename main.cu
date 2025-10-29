@@ -132,10 +132,6 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 		float x[3]; 
 		
 		float T = 0;
-		//float h = 0.001; //DT
-
-		int i_minus;
-		int i = 0;
 		
 		for (int n=0; n<ITERATIONS; n++) // több időlépés?; belső időmérések?
 		{
@@ -160,7 +156,7 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 				Lorenz(k[i], x, P);
 			}
 			
-
+				
 			#pragma unroll
 			for (int j = 0; j < RK_STAGE; j++){
 				#pragma unroll
