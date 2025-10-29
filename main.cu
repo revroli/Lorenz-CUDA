@@ -85,7 +85,7 @@ int main()
 	cudaMemcpyToSymbol(const_d_B, h_B, sizeof(float) * RK_ORDER);
 
 	//Kernel run
-	RungeKutta_Butcher_nounroll<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
+	RungeKutta_Baseline_with_zeros_fast<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
 	cudaDeviceSynchronize();
 	
 	//Save the products
