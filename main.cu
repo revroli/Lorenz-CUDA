@@ -107,9 +107,9 @@ int main()
 
 __forceinline__ __device__ void Lorenz(float* F, float* X, float P)
 {
-	F[0] = float(10)*(X[1] - X[0]);			//FMUL, FADD
-	F[1] = P*X[0] - X[1] - X[0]*X[2];		//FMA, FMA
-	F[2] = X[0]*X[1] - float(2.666) * X[2];	//FMUL, FMA
+	F[0] = float(10)*(X[1] - X[0]);
+	F[1] = P*X[0] - X[1] - X[0]*X[2];
+	F[2] = X[0]*X[1] - float(2.666) * X[2];
 }
 
 __global__ void RungeKutta_Butcher(float* d_State, float* d_Parameters, int N){
@@ -120,19 +120,16 @@ __global__ void RungeKutta_Butcher(float* d_State, float* d_Parameters, int N){
 		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
 
 		float P = d_Parameters[tid];
-		
-		// van egy k vector
-		//implicitet nem lehet így kiszámolni, úgyhogy csak az explicitet számoljuk
 
 		float k[RK_STAGE][SYS_DIM];
 		float x[3]; 
 		
 		float T = 0;
 		
-		for (int n=0; n<ITERATIONS; n++) // több időlépés?; belső időmérések?
+		for (int n=0; n<ITERATIONS; n++)
 		{
 			#pragma unroll
-			for (int i = 0; i < RK_STAGE; i++){ //Azért 1-től kezdődik, mert a 0-dik sorát már előbb kiszámoiltuk
+			for (int i = 0; i < RK_STAGE; i++){
 				
 				#pragma unroll	
 				for (int k_iter = 0; k_iter < SYS_DIM; k_iter++){		//gyorsabb különszedve a 2 for loop
@@ -144,7 +141,7 @@ __global__ void RungeKutta_Butcher(float* d_State, float* d_Parameters, int N){
 				for (int k_iter = 0; k_iter < SYS_DIM; k_iter++){
 
 					#pragma unroll
-					for (int j=0; j < i; j++){	//indexelést kijavítani mátrixosra akár
+					for (int j=0; j < i; j++){
 						x[k_iter] = x[k_iter] + k[j][k_iter] * const_d_A[i][j];
 					}
 				}	
@@ -160,11 +157,6 @@ __global__ void RungeKutta_Butcher(float* d_State, float* d_Parameters, int N){
 					X[i] = X[i] + const_d_B[j] * k[j][i];
 				}
 			}
-
-			/*for (int i = 0; i < 3; i++){
-				X[i] = X[i] + const_d_B[0] * k[0][i] + const_d_B[1] * k[1][i] + const_d_B[2] * k[2][i] + const_d_B[3] * k[3][i]; 
-			}*/
-
 
 			T += H; //kihagyható amúgy
 		}
