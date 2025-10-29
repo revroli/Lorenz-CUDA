@@ -292,7 +292,7 @@ __global__ void RungeKutta_Butcher_half_unrolled(float* d_State, float* d_Parame
 			#pragma unroll
 			for (i = 0; i<3; i++)
 			{
-				x[i] = X[i] + H * (k[0] * const_d_A[0] + k[3+i] * const_d_A[4]);	//FMA, FMUL, FADD, FMA
+				x[i] = X[i] + H * (k[i] * const_d_A[0] + k[3+i] * const_d_A[4]);	//FMA, FMUL, FADD, FMA
 			}
 
 			Lorenz(k + 6, x, P);
