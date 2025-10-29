@@ -6,8 +6,9 @@
 
 #include "DeviceProperties.cuh"
 
-#define RK_ORDER 4
-#define BUTCHER_SIZE RK_ORDER + 1
+#define RK_STAGE 4
+#define BUTCHER_SIZE RK_STAGE + 1
+#define SYS_DIM 3
 
 #define H 0.001f // [s]
 #define ITERATIONS 10000
@@ -24,8 +25,8 @@ __global__ void RungeKutta_Baseline_with_zeros_slow(float*, float*, int);
 
 void Linspace(float*, float, float, int);
 
-__constant__ float const_d_A[(RK_ORDER-1)*(RK_ORDER-1)];
-__constant__ float const_d_B[RK_ORDER];
+__constant__ float const_d_A[RK_STAGE][RK_STAGE];
+__constant__ float const_d_B[RK_STAGE];
 
 int main()
 {
@@ -48,8 +49,9 @@ int main()
 	//Allocate CPU memory
 	float* h_State      = (float*)aligned_alloc(64, 3*Resolution * sizeof(float));
 	float* h_Parameters = (float*)aligned_alloc(64,   Resolution * sizeof(float));
-	float* h_A = (float*)aligned_alloc(64,   (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float));
-	float* h_B = (float*)aligned_alloc(64,   RK_ORDER * sizeof(float));
+	float h_A[RK_STAGE][RK_STAGE];
+	//float* h_A = (float*)aligned_alloc(64,   (RK_STAGE * RK_STAGE) * sizeof(float));
+	float* h_B = (float*)aligned_alloc(64,   RK_STAGE * sizeof(float));
 
 	//Allocate GPU memory (constant memory doesn't need allocation)
 	float* d_State;
@@ -67,9 +69,9 @@ int main()
 	}	
 
 	//RK4 method parameters. Can be changed
-	h_A[0] = H*0.5f; h_A[1] = H*0.0f; h_A[2] = H*0.0f;
-	h_A[3] = H*0.0f; h_A[4] = H*0.5f; h_A[5] = H*0.0f;
-	h_A[6] = H*0.0f; h_A[7] = H*0.0f; h_A[8] = H*1.0f;
+	h_A[1][0] = H*0.5f; h_A[1][1] = H*0.0f; h_A[1][2] = H*0.0f;
+	h_A[2][0] = H*0.0f; h_A[2][1] = H*0.5f; h_A[2][2] = H*0.0f;
+	h_A[3][0] = H*0.0f; h_A[3][1] = H*0.0f; h_A[3][2] = H*1.0f;
 
 	h_B[0] = H*1.0f/6.0f;
 	h_B[1] = H*1.0f/3.0f;
@@ -81,8 +83,8 @@ int main()
 	cudaMemcpy(d_Parameters, h_Parameters, sizeof(float)*Resolution, cudaMemcpyHostToDevice);
 	
 	//Butcher Tableau to constant memory
-	cudaMemcpyToSymbol(const_d_A, h_A, (RK_ORDER - 1) * (RK_ORDER - 1) * sizeof(float));
-	cudaMemcpyToSymbol(const_d_B, h_B, sizeof(float) * RK_ORDER);
+	cudaMemcpyToSymbol(const_d_A, h_A, RK_STAGE * RK_STAGE * sizeof(float));
+	cudaMemcpyToSymbol(const_d_B, h_B, RK_STAGE * sizeof(float));
 
 	//Kernel run
 	RungeKutta_Baseline_with_zeros_fast<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
@@ -126,8 +128,8 @@ __global__ void RungeKutta_Butcher_nounroll(float* d_State, float* d_Parameters,
 		// van egy k vector
 		//implicitet nem lehet így kiszámolni, úgyhogy csak az explicitet számoljuk
 
-		float k[RK_ORDER * 3];		//hogyan rendezem? legyen [iteráció][x-dimenzió]
-		float x[3]; 		//ha nincs volatile, akkor a fordtó kiegyszerűsíti a számolásokat
+		float k[RK_STAGE][SYS_DIM];
+		float x[3]; 
 		
 		float T = 0;
 		//float h = 0.001; //DT
