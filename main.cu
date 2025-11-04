@@ -83,7 +83,7 @@ int main()
 	cudaMemcpyToSymbol(const_d_B, h_B, RK_STAGE * sizeof(float));
 
 	//Kernel run
-	RungeKutta_Butcher_nounroll<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
+	RungeKutta_Butcher<<<GridSize, BlockSize>>> (d_State, d_Parameters, Resolution); // függvény nevet változtatni
 	cudaDeviceSynchronize();
 	
 	//Save the products
@@ -117,12 +117,18 @@ __global__ void RungeKutta_Butcher(float* d_State, float* d_Parameters, int N){
 	
 	if (tid < N)
 	{
-		float X[3] = {d_State[tid], d_State[tid+N], d_State[tid+2*N]};
+
+		float X[SYS_DIM];
+
+		#pragma unroll
+		for (int i = 0; i < SYS_DIM; i++){
+			X[i] = d_State[tid + i * N];
+		}
 
 		float P = d_Parameters[tid];
 
 		float k[RK_STAGE][SYS_DIM];
-		float x[3]; 
+		float x[SYS_DIM]; 
 		
 		float T = 0;
 		
@@ -161,9 +167,10 @@ __global__ void RungeKutta_Butcher(float* d_State, float* d_Parameters, int N){
 			T += H; //kihagyható amúgy
 		}
 		
-		d_State[tid] = X[0];
-		d_State[tid + N] = X[1];
-		d_State[tid + 2*N] = X[2];
+		#pragma unroll
+		for (int i = 0; i < SYS_DIM; i++){
+			d_State[tid + i * N] = X[i];
+		}
 	}
 }
 
